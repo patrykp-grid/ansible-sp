@@ -1,0 +1,38 @@
+---
+- hosts: webservers
+  become: yes
+
+  tasks:
+    - name: Ensure Docker is installed
+      ansible.builtin.command: which docker
+      register: docker_installed
+      ignore_errors: true
+
+    - name: Install Docker if not installed
+      ansible.builtin.yum:
+        name: docker
+        state: present
+      when: docker_installed.rc != 0
+
+    - name: Ensure Docker is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Copy Docker image to EC2 instance
+      ansible.builtin.copy:
+        src: ./spring-petclinic-image.tar
+        dest: /tmp/spring-petclinic-image.tar
+
+    - name: Load Docker image on EC2 instance
+      ansible.builtin.shell:
+        cmd: docker load < /tmp/spring-petclinic-image.tar
+
+    - name: Stop and remove any existing Spring PetClinic container
+      ansible.builtin.command:
+        cmd: docker rm -f spring-petclinic || true
+
+    - name: Deploy Spring PetClinic container
+      ansible.builtin.command:
+        cmd: docker run -d --name spring-petclinic -p 8080:8080 --restart always ppiecuch/ansible-sp:2abc6895
